@@ -34,8 +34,6 @@ class LMT(CS.PyCStruct):
             self.animation_offsets += [struct.unpack('Q', data.read(8))[0]]
     
     def get_animation(self, id):
-        if self.animation_offsets[id] == 0:
-            return None
         return readAt(BytesIO(self.full_data), self.animation_offsets[id], AnimationBlock)
     
     def override_animation(self, id, animation):
@@ -170,7 +168,7 @@ class Events(CS.PyCStruct):
 
     class Data(CS.PyCStruct):
         fields = OrderedDict([
-            ('values', 'int[5]')
+            ("values", "ubyte[20]")
         ])
 
     fields = OrderedDict([
