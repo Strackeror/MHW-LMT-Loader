@@ -292,7 +292,7 @@ class LmtImportOperator(bpy.types.Operator, bpy_extras.io_utils.ImportHelper):
 
     filename_ext = ".lmt"
     filter_glob = StringProperty(default="*.lmt", options={'HIDDEN'}, maxlen=255)
-    animation_id = StringProperty(default="*", maxlen=20)
+    animation_id = StringProperty(default="*", maxlen=20, name="Animation ID", description="'*' to load all animations, otherwise one number")
 
     def execute(self, context):
         lmt = LMT(open(self.properties.filepath, 'rb'))
