@@ -80,14 +80,6 @@ class AnimationBlock(CS.PyCStruct):
         self.bone_paths_offset = offset
         self.bone_path_count = len(self.bone_paths)
         offset += self.bone_path_count * len(BonePath())
-        for i, path in enumerate(self.bone_paths):
-            path.buffer_size = len(path.buffer)
-            if path.buffer_size:
-                path.buffer_offset = offset 
-            else:
-                path.buffer_offset = 0
-            offset = align(offset + path.buffer_size, 8)
-
         for path in self.bone_paths:
             if path.bounds:
                 path.bounds_offset = offset
@@ -95,6 +87,15 @@ class AnimationBlock(CS.PyCStruct):
             else:
                 path.bounds_offset = 0
 
+        for i, path in enumerate(self.bone_paths):
+            path.buffer_size = len(path.buffer)
+            if path.buffer_size:
+                path.buffer_offset = offset 
+            else:
+                path.buffer_offset = 0
+            offset = align(offset + path.buffer_size, 4)
+
+        offset = align(offset, 16)
         self.events_offset = offset
         offset = self.events.update_offsets(offset)
         return offset
@@ -113,14 +114,16 @@ class AnimationBlock(CS.PyCStruct):
         ret = b''
         for path in self.bone_paths:
             ret += path.serialize()
-        
-        for path in self.bone_paths:
-            ret += path.buffer
-            ret = pad(ret, 8)
 
         for path in self.bone_paths:
             if path.bounds:
                 ret += path.bounds.serialize()
+        
+        for path in self.bone_paths:
+            ret += path.buffer
+            ret = pad(ret, 4)
+
+        ret = pad(ret, 16)
         ret += self.events.serialize()
         return ret
         
@@ -158,8 +161,7 @@ class BonePath(CS.PyCStruct):
 
 
 class Events(CS.PyCStruct):
-
-    class Event(CS.PyCStruct):
+    class EventParameter(CS.PyCStruct):
         fields = OrderedDict([
             ("offset", "uint64"),
             ("count", "uint64"),
@@ -172,8 +174,8 @@ class Events(CS.PyCStruct):
         ])
 
     fields = OrderedDict([
-        ("categories_offset", "uint64"),
-        ("category_count", "uint64"),
+        ("events_offset", "uint64"),
+        ("event_count", "uint64"),
         ("unkn", "int[8]")
     ])
 
@@ -183,38 +185,38 @@ class Events(CS.PyCStruct):
         if not data:
             return
         
-        self.categories = []
-        for i in range(self.category_count):
-            self.categories += [readAt(data, self.categories_offset + i * len(self.Event()), self.Event)]
+        self.events = []
+        for i in range(self.event_count):
+            self.events += [readAt(data, self.events_offset + i * len(self.EventParameter()), self.EventParameter)]
         
-        for category in self.categories:
-            category.events = []
-            for i in range(category.count):
-                event = readAt(data, category.offset + i * len(self.Event()), self.Event)
-                event.buffer = []
-                for j in range(event.count):
-                    event.buffer += [readAt(data, event.offset + j * len(self.Data()), self.Data)]
-                category.events += [event]
+        for event in self.events:
+            event.parameters = []
+            for i in range(event.count):
+                parameter = readAt(data, event.offset + i * len(self.EventParameter()), self.EventParameter)
+                parameter.buffer = []
+                for j in range(parameter.count):
+                    parameter.buffer += [readAt(data, parameter.offset + j * len(self.Data()), self.Data)]
+                event.parameters += [parameter]
     
     def update_offsets(self, offset):
         offset += len(self)
-        self.categories_offset = offset
-        self.category_count = len(self.categories)
+        self.events_offset = offset
+        self.event_count = len(self.events)
 
-        offset += len(self.Event()) * self.category_count
+        offset += len(self.EventParameter()) * self.event_count
         offset = align(offset, 16)
 
-        for category in self.categories:
-            category.count = len(category.events)
-            category.offset = offset
-            offset += category.count * len(self.Event())
+        for event in self.events:
+            event.count = len(event.parameters)
+            event.offset = offset
+            offset += event.count * len(self.EventParameter())
             offset = align(offset, 16)
         
-        for category in self.categories:
-            for event in category.events:
-                event.count = len(event.buffer)
-                event.offset = offset
-                offset += event.count * len(self.Data())
+        for event in self.events:
+            for parameter in event.parameters:
+                parameter.count = len(parameter.buffer)
+                parameter.offset = offset
+                offset += parameter.count * len(self.Data())
                 offset = align(offset, 16)
 
         return offset
@@ -222,19 +224,19 @@ class Events(CS.PyCStruct):
     def serialize(self):
         ret = super().serialize()
 
-        for category in self.categories:
-            ret += category.serialize()
+        for event in self.events:
+            ret += event.serialize()
         ret = pad(ret, 16)
 
 
-        for category in self.categories:
-            for event in category.events:
-                ret += event.serialize()
+        for event in self.events:
+            for parameter in event.parameters:
+                ret += parameter.serialize()
             ret = pad(ret, 16)
         
-        for category in self.categories:
-            for event in category.events:
-                for data in event.buffer:
+        for event in self.events:
+            for parameter in event.parameters:
+                for data in parameter.buffer:
                     ret += data.serialize()
                 ret = pad(ret, 16)
 
